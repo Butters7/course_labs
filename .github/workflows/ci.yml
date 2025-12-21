@@ -182,7 +182,7 @@ jobs:
 
       - name: Scan repository for secrets with gitleaks
         run: |
-          gitleaks detect --source . -v
+          gitleaks detect --source . -v --config .gitleaks.toml
 
   security_docker_checks:
     runs-on: ubuntu-latest
