@@ -153,6 +153,6 @@
 - [GDPR (EU 2016/679)](https://eur-lex.europa.eu/eli/reg/2016/679)
 - [152-ФЗ «О персональных данных»](http://www.consultant.ru/document/cons_doc_LAW_61801/)
 
-***
+---
 
 Copyright (c) 2025 Egor Davydov
