@@ -796,6 +796,6 @@ Date:   Sun Dec 21 19:24:24 2025 +0300
     feat(helloapp) Добавлен hello.py и Dockerfile
 ```
 
-***
+---
 
 Copyright (c) 2025 Egor Davydov
