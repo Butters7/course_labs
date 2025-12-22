@@ -78,67 +78,34 @@ else
 fi
 
 run_bench() {
-  local mounts="$1"
-  local extra_opts="$2"
-
-  echo "Running Docker Bench Security container (CIS host audit)"
+  echo "Running Docker Bench Security (CIS host audit)"
   echo ""
 
-  BENCH_OUTPUT="${REPORTS_TXT}/docker-bench-security-cis.txt"
-  
-  docker run --rm \
-    --name "docker-bench-security-$(date +%s)" \
-    --cap-add audit_control \
-    --security-opt no-new-privileges \
-    ${extra_opts} \
-    -e DOCKER_CONTENT_TRUST="${DOCKER_CONTENT_TRUST:-0}" \
-    -v /var/run/docker.sock:/var/run/docker.sock:ro \
-    ${mounts} \
-    --label docker_bench_security \
-    "${BENCH_IMAGE}" 2>&1 | tee "${BENCH_OUTPUT}"
-  
+  # Используем абсолютный путь
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  BENCH_OUTPUT="${SCRIPT_DIR}/audit_reports/text/docker-bench-security-cis.txt"
+  BENCH_DIR="/tmp/docker-bench-security"
+
+  # Клонируем репозиторий если его нет
+  if [ ! -d "${BENCH_DIR}" ]; then
+    echo "Cloning docker-bench-security repository..."
+    git clone --depth 1 https://github.com/docker/docker-bench-security.git "${BENCH_DIR}"
+  fi
+
+  # Запускаем скрипт напрямую
+  cd "${BENCH_DIR}"
+  sudo ./docker-bench-security.sh 2>&1 | tee "${BENCH_OUTPUT}"
+  cd - > /dev/null
+
   echo ""
   echo "CIS audit output saved to: ${BENCH_OUTPUT}"
 }
 
 case "${PLATFORM}" in
   Linux)
-    echo "Linux host detected – configuring mounts for CIS Docker Benchmark coverage"
+    echo "Linux host detected – running CIS Docker Benchmark"
     echo ""
-
-    MOUNTS="-v /etc:/etc:ro \
-            -v /var/lib:/var/lib:ro \
-            -v /usr/bin:/usr/bin:ro"
-
-    if [ -f "/usr/bin/containerd" ] && [ ! -d "/usr/bin/containerd" ]; then
-      MOUNTS="${MOUNTS} -v /usr/bin/containerd:/usr/bin/containerd:ro"
-      echo "Mounting /usr/bin/containerd"
-    fi
-
-    if [ -f "/usr/bin/runc" ] && [ ! -d "/usr/bin/runc" ]; then
-      MOUNTS="${MOUNTS} -v /usr/bin/runc:/usr/bin/runc:ro"
-      echo "Mounting /usr/bin/runc"
-    fi
-
-    if [ -d "/usr/lib/systemd" ]; then
-      MOUNTS="${MOUNTS} -v /usr/lib/systemd:/usr/lib/systemd:ro"
-      echo "Mounting /usr/lib/systemd"
-    elif [ -d "/lib/systemd" ]; then
-      MOUNTS="${MOUNTS} -v /lib/systemd:/lib/systemd:ro"
-      echo "Mounting /lib/systemd"
-    fi
-
-    if [ -d "/etc/docker" ]; then
-      MOUNTS="${MOUNTS} -v /etc/docker:/etc/docker:ro"
-      echo "Mounting /etc/docker"
-    fi
-
-    if [ -d "/var/log" ]; then
-      MOUNTS="${MOUNTS} -v /var/log:/var/log:ro"
-      echo "Mounting /var/log"
-    fi
-
-    run_bench "${MOUNTS}" "--network host --pid host --userns host"
+    run_bench
     ;;
 
   macOS)
@@ -154,34 +121,8 @@ case "${PLATFORM}" in
 
     if grep -qi "microsoft" /proc/version 2>/dev/null; then
       echo "Docker appears to be running under WSL (Linux kernel)"
-      echo "CIS checks will apply to this WSL Linux environment and Docker Engine inside it"
       echo ""
-
-      MOUNTS="-v /etc:/etc:ro \
-              -v /var/lib:/var/lib:ro \
-              -v /usr/bin:/usr/bin:ro"
-
-      if [ -f "/usr/bin/containerd" ] && [ ! -d "/usr/bin/containerd" ]; then
-        MOUNTS="${MOUNTS} -v /usr/bin/containerd:/usr/bin/containerd:ro"
-        echo "Mounting /usr/bin/containerd"
-      fi
-
-      if [ -f "/usr/bin/runc" ] && [ ! -d "/usr/bin/runc" ]; then
-        MOUNTS="${MOUNTS} -v /usr/bin/runc:/usr/bin/runc:ro"
-        echo "Mounting /usr/bin/runc"
-      fi
-
-      if [ -d "/etc/docker" ]; then
-        MOUNTS="${MOUNTS} -v /etc/docker:/etc/docker:ro"
-        echo "Mounting /etc/docker"
-      fi
-
-      if [ -d "/var/log" ]; then
-        MOUNTS="${MOUNTS} -v /var/log:/var/log:ro"
-        echo "Mounting /var/log"
-      fi
-
-      run_bench "${MOUNTS}" "--network host --pid host --userns host"
+      run_bench
     else
       echo "Docker Desktop on native Windows without WSL Linux context is not fully supported by docker-bench-security."
       echo "For full CIS Docker Benchmark coverage, run this script inside a Linux or WSL2 environment where Docker Engine is available."
