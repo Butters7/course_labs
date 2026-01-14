@@ -85,4 +85,4 @@ site
 *.env
 
 # Node.js
-node_modules/
+node_modules/labs/lab07/sca/dependency-check/
