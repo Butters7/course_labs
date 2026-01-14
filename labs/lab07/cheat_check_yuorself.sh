@@ -68,7 +68,7 @@ echo
 echo "SCA with Maven Dependency-Check plugin"
 if command -v mvn >/dev/null 2>&1; then
   cd "${ROOT_DIR}/sca"
-  mvn org.owasp:dependency-check-maven:check || true
+  mvn org.owasp:dependency-check-maven:check -DossindexAnalyzerEnabled=false || true
   echo "[+] Maven Dependency-Check (if DB ok) writes reports under sca/dependency-check-report or pom.xml outputDirectory"
 else
   echo "[-] mvn not found, skipping Maven-based Dependency-Check"
