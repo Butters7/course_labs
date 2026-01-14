@@ -18,13 +18,15 @@ DB_PATH = os.environ.get("APP_DB_PATH", "app.db")
 # Security headers middleware
 @app.after_request
 def add_security_headers(response):
-    response.headers['X-Frame-Options'] = 'DENY'
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'"
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
-    response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
-    response.headers['Cross-Origin-Embedder-Policy'] = 'require-corp'
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self'"
+    )
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
     return response
 
 
@@ -58,8 +60,8 @@ def set_secure_cookie(response, name, value):
         name,
         value,
         httponly=True,
-        samesite='Lax',
-        secure=False  # Set True in production with HTTPS
+        samesite="Lax",
+        secure=False,  # Set True in production with HTTPS
     )
 
 
@@ -131,7 +133,9 @@ def search():
     <p>SQL Injection исправлен - используются параметризованные запросы.</p>
     <a href="/">Назад</a>
     """
-    return render_template_string(template, username=escape(username), rows=rows, error=error)
+    return render_template_string(
+        template, username=escape(username), rows=rows, error=error
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -186,7 +190,9 @@ def profile():
     <p>Роль: {{ role }}</p>
     <a href="/">Назад</a>
     """
-    return render_template_string(template, username=escape(username), role=escape(role))
+    return render_template_string(
+        template, username=escape(username), role=escape(role)
+    )
 
 
 @app.route("/admin")
