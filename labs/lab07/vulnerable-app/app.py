@@ -58,14 +58,11 @@ def search():
 def ping():
     host = request.args.get("host", "127.0.0.1")
     # FIX: Validate input and use subprocess with shell=False
-    if not re.match(r'^[\d\.]+$', host):
+    if not re.match(r"^[\d\.]+$", host):
         return "Invalid host format", 400
     try:
         result = subprocess.run(
-            ["ping", "-c", "1", host],
-            capture_output=True,
-            text=True,
-            timeout=5
+            ["ping", "-c", "1", host], capture_output=True, text=True, timeout=5
         )
         return f"Pinged {escape(host)}: {result.returncode}"
     except subprocess.TimeoutExpired:
@@ -78,9 +75,7 @@ def backup():
     target = "/tmp/backup.sql"
     try:
         result = subprocess.run(
-            ["pg_dump", "mydb", "-f", target],
-            capture_output=True,
-            timeout=60
+            ["pg_dump", "mydb", "-f", target], capture_output=True, timeout=60
         )
         return f"Backup completed with code: {result.returncode}"
     except Exception as e:
