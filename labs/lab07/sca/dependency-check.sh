@@ -11,10 +11,16 @@ mkdir -p "${DATA_DIR}"
 
 echo "OWASP Dependency-Check SCA"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOCAL_DC="${SCRIPT_DIR}/dependency-check/bin/dependency-check.sh"
+
 if command -v dependency-check >/dev/null 2>&1; then
   DC_CMD="dependency-check"
+elif [ -x "${LOCAL_DC}" ]; then
+  DC_CMD="${LOCAL_DC}"
 else
-  echo "ERROR: global 'dependency-check' CLI not found."
+  echo "ERROR: dependency-check CLI not found."
+  echo "Install: download from https://github.com/jeremylong/DependencyCheck/releases"
   exit 1
 fi
 
@@ -36,10 +42,12 @@ echo "    - ${ROOT_DIR}/sca/lib"
   --scan "${ROOT_DIR}/vulnerable-app" "${ROOT_DIR}/sca/lib" \
   --format HTML \
   --format JSON \
+  --format CSV \
   --project "${PROJECT_NAME}" \
   --out "${OUT_DIR}" \
   --data "${DATA_DIR}" \
-  --noupdate
+  --noupdate \
+  --disableOssIndex
 
 if command -v jq >/dev/null 2>&1 && [ -f "${OUT_DIR}/dependency-check-report.json" ]; then
   echo "[i] Dependency-Check JSON dependencies count:"
