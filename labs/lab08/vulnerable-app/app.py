@@ -8,10 +8,26 @@ from flask import (
 )
 import sqlite3
 import os
+from html import escape
 
 app = Flask(__name__)
 
 DB_PATH = os.environ.get("APP_DB_PATH", "app.db")
+
+
+# Security headers middleware
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self'"
+    )
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+    return response
 
 
 def init_db():
@@ -38,35 +54,48 @@ def init_db():
     conn.close()
 
 
+def set_secure_cookie(response, name, value):
+    """Set cookie with security flags"""
+    response.set_cookie(
+        name,
+        value,
+        httponly=True,
+        samesite="Lax",
+        secure=False,  # Set True in production with HTTPS
+    )
+
+
 @app.route("/")
 def index():
     html = """
-    <h1>Vulnerable DAST Demo App</h1>
-    <p>Пример уязвимого приложения для лабораторной по DAST.</p>
+    <h1>Secure DAST Demo App</h1>
+    <p>Исправленное приложение для лабораторной по DAST.</p>
     <ul>
-      <li><a href="/echo?msg=Hello">Reflected XSS / echo</a></li>
-      <li><a href="/search?username=admin">SQL Injection / search</a></li>
-      <li><a href="/login">Небезопасный логин</a></li>
-      <li><a href="/profile">Профиль (зависит от cookie)</a></li>
-      <li><a href="/admin">«Админка» без нормальной авторизации</a></li>
-      <li><a href="/files/">Directory listing</a></li>
+      <li><a href="/echo?msg=Hello">Echo (XSS fixed)</a></li>
+      <li><a href="/search?username=admin">Search (SQLi fixed)</a></li>
+      <li><a href="/login">Логин (SQLi fixed)</a></li>
+      <li><a href="/profile">Профиль</a></li>
+      <li><a href="/admin">Админка</a></li>
+      <li><a href="/files/">Files</a></li>
     </ul>
     """
     resp = make_response(html)
-    resp.set_cookie("session", "guest-session-id")
+    set_secure_cookie(resp, "session", "guest-session-id")
     return resp
 
 
 @app.route("/echo")
 def echo():
     msg = request.args.get("msg", "")
+    # FIX: Escape user input to prevent XSS
+    safe_msg = escape(msg)
     template = """
     <h2>Echo</h2>
-    <p>Сообщение: {msg}</p>
-    <p>Попробуйте передать что-нибудь вроде: <code>&lt;script&gt;alert('XSS')&lt;/script&gt;</code></p>
+    <p>Сообщение: {{ msg }}</p>
+    <p>XSS исправлен - ввод экранируется.</p>
     <a href="/">Назад</a>
-    """.format(msg=msg)
-    return render_template_string(template)
+    """
+    return render_template_string(template, msg=safe_msg)
 
 
 @app.route("/search")
@@ -74,11 +103,12 @@ def search():
     username = request.args.get("username", "")
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    query = f"SELECT id, username, role FROM users WHERE username = '{username}'"  # nosec B608
+    # FIX: Use parameterized query to prevent SQL Injection
+    query = "SELECT id, username, role FROM users WHERE username = ?"
     rows = []
     error = None
     try:
-        for row in cur.execute(query):
+        for row in cur.execute(query, (username,)):
             rows.append(row)
     except Exception as e:
         error = str(e)
@@ -87,9 +117,9 @@ def search():
 
     template = """
     <h2>Поиск пользователя</h2>
-    <p>Запрос: <code>{{ query }}</code></p>
+    <p>Поиск: <code>{{ username }}</code></p>
     {% if error %}
-      <p style="color:red;">SQL error: {{ error }}</p>
+      <p style="color:red;">Error: {{ error }}</p>
     {% endif %}
     {% if rows %}
       <ul>
@@ -100,10 +130,12 @@ def search():
     {% else %}
       <p>Ничего не найдено</p>
     {% endif %}
-    <p>Попробуйте, например: <code>?username=admin' OR '1'='1</code></p>
+    <p>SQL Injection исправлен - используются параметризованные запросы.</p>
     <a href="/">Назад</a>
     """
-    return render_template_string(template, query=query, rows=rows, error=error)
+    return render_template_string(
+        template, username=escape(username), rows=rows, error=error
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -127,18 +159,19 @@ def login():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
-    query = f"SELECT id, username, role FROM users WHERE username = '{username}' AND password = '{password}'"  # nosec B608
-    row = cur.execute(query).fetchone()
+    # FIX: Use parameterized query to prevent SQL Injection
+    query = "SELECT id, username, role FROM users WHERE username = ? AND password = ?"
+    row = cur.execute(query, (username, password)).fetchone()
     conn.close()
 
     if row:
         _, uname, role = row
         resp = make_response(
-            f"<h2>Добро пожаловать, {uname} ({role})!</h2><a href='/'>На главную</a>"
+            f"<h2>Добро пожаловать, {escape(uname)} ({escape(role)})!</h2><a href='/'>На главную</a>"
         )
-
-        resp.set_cookie("user", uname)
-        resp.set_cookie("role", role)
+        # FIX: Set secure cookies
+        set_secure_cookie(resp, "user", uname)
+        set_secure_cookie(resp, "role", role)
         return resp
     else:
         return render_template_string(
@@ -155,10 +188,11 @@ def profile():
     <h2>Профиль пользователя</h2>
     <p>Имя: {{ username }}</p>
     <p>Роль: {{ role }}</p>
-    <p>Cookie легко подделать: можно выдать себе роль 'admin'.</p>
     <a href="/">Назад</a>
     """
-    return render_template_string(template, username=username, role=role)
+    return render_template_string(
+        template, username=escape(username), role=escape(role)
+    )
 
 
 @app.route("/admin")
@@ -166,7 +200,7 @@ def admin():
     role = request.cookies.get("role", "guest")
     if role != "admin":
         return (
-            "<h2>Доступ запрещён: вы не admin</h2><p>Попробуйте изменить cookie 'role'.</p><a href='/'>Назад</a>",
+            "<h2>Доступ запрещён: вы не admin</h2><a href='/'>Назад</a>",
             403,
         )
 
@@ -174,8 +208,8 @@ def admin():
     <h2>Admin panel</h2>
     <p>Секретные настройки приложения (демо).</p>
     <ul>
-      <li>DEBUG: true</li>
-      <li>FEATURE_FLAG: experimental_mode</li>
+      <li>DEBUG: false</li>
+      <li>FEATURE_FLAG: production_mode</li>
     </ul>
     <a href="/">Назад</a>
     """
@@ -188,7 +222,11 @@ def files(subpath=""):
     base_dir = os.path.abspath(os.path.dirname(__file__))
     target_dir = os.path.join(base_dir, "files")
 
-    full_path = os.path.join(target_dir, subpath)
+    full_path = os.path.realpath(os.path.join(target_dir, subpath))
+
+    # FIX: Prevent path traversal
+    if not full_path.startswith(target_dir):
+        return "<h2>Доступ запрещён</h2><a href='/'>Назад</a>", 403
 
     if not os.path.exists(full_path):
         return "<h2>Путь не найден</h2><a href='/'>Назад</a>", 404
@@ -196,22 +234,22 @@ def files(subpath=""):
     if os.path.isdir(full_path):
         entries = os.listdir(full_path)
         items = "".join(
-            f"<li><a href='/files/{subpath}{'' if subpath.endswith('/') or subpath == '' else '/'}{e}'>{e}</a></li>"
+            f"<li><a href='/files/{subpath}{'' if subpath.endswith('/') or subpath == '' else '/'}{escape(e)}'>{escape(e)}</a></li>"
             for e in entries
         )
         html = f"""
-        <h2>Files under /files/{subpath}</h2>
+        <h2>Files under /files/{escape(subpath)}</h2>
         <ul>{items}</ul>
-        <p>Пример directory listing без ограничений.</p>
         <a href="/">Назад</a>
         """
         return html
 
     with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
         content = f.read()
-    return f"<pre>{content}</pre>"
+    return f"<pre>{escape(content)}</pre>"
 
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=8080, debug=True)  # nosec B201,B104
+    # FIX: Disable debug mode in production
+    app.run(host="0.0.0.0", port=8080, debug=False)

@@ -5,7 +5,7 @@ services:
       context: ./vulnerable-app
     container_name: lab08-vulnerable-app
     ports:
-      - "8080:8080"
+      - "8081:8080"
     restart: unless-stopped
 
 networks:
